@@ -33,6 +33,8 @@ enum WorkspaceSubcommands {
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
+
     let cli = Cli::parse();
     let mut state = state::load_state()?;
 
