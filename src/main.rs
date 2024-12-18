@@ -1,7 +1,11 @@
-use std::{fs, path::{Path, PathBuf}};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use anyhow::{Context, Result};
+use std::process::Command;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Project {
@@ -16,7 +20,9 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        Self { projects: Vec::new() }
+        Self {
+            projects: Vec::new(),
+        }
     }
 }
 
@@ -31,10 +37,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Init,
-    Clone {
-        relative_path: String,
-        url: String,
-    },
+    Clone { relative_path: String, url: String },
 }
 
 fn get_state_file_path() -> PathBuf {
@@ -48,7 +51,8 @@ fn load_state() -> Result<AppState> {
     let state_file = get_state_file_path();
     if state_file.exists() {
         let content = fs::read_to_string(&state_file).context("Failed to read state file")?;
-        let state: AppState = serde_yaml::from_str(&content).context("Failed to parse state file")?;
+        let state: AppState =
+            serde_yaml::from_str(&content).context("Failed to parse state file")?;
         Ok(state)
     } else {
         Ok(AppState::default())
@@ -78,20 +82,24 @@ fn main() -> Result<()> {
             println!("Initializing...");
             save_state(&AppState::default())?;
         }
+
         Commands::Clone { relative_path, url } => {
-            // Convert the relative path to an absolute path
             let absolute_path = std::env::current_dir()
                 .context("Failed to get current working directory")?
-                .join(Path::new(relative_path))
-                .canonicalize()
-                .context("Failed to convert to absolute path")?;
-
-            // TODO: If aboslute path does not exist, create folders until it does
+                .join(Path::new(relative_path));
 
             println!("Cloning: {}", url);
             println!("Absolute path: {}", absolute_path.display());
 
-            // Add the project to the state
+            let status = Command::new("git")
+                .args(["clone", url, absolute_path.to_str().unwrap()])
+                .status()
+                .context("Failed to execute git command")?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("Git command failed"));
+            }
+
             state.projects.push(Project {
                 absolute_path: absolute_path.to_string_lossy().to_string(),
                 url: url.clone(),
