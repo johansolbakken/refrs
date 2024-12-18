@@ -6,6 +6,7 @@ mod command;
 mod repo;
 mod state;
 mod util;
+mod model;
 
 #[derive(Parser)]
 #[command(name = "refrs")]
