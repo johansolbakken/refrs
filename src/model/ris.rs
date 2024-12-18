@@ -438,6 +438,111 @@ pub fn parse_ris(content: &str) -> Result<Vec<RisEntry>> {
     Ok(entries)
 }
 
+/// Convert `ReferenceType` to a BibTeX entry type string.
+fn reference_type_to_bibtex(ty: &ReferenceType) -> &'static str {
+    match ty {
+        ReferenceType::Journal => "article",
+        ReferenceType::Book => "book",
+        ReferenceType::ConferencePaper => "inproceedings",
+        ReferenceType::Thesis => "thesis",      // or "phdthesis"
+        ReferenceType::Report => "techreport",
+        ReferenceType::UnpublishedWork => "unpublished",
+        _ => "misc",
+    }
+}
+
+/// Convert a `RisEntry` to a BibTeX-formatted string.
+pub fn ris_entry_to_bibtex_string(ris: &RisEntry, entry_key: &str) -> String {
+    let entry_type = reference_type_to_bibtex(&ris.ty);
+
+    // Helper to get first value of a field
+    let get_first = |key: &str| ris.fields.get(key).and_then(|v| v.first());
+    // Helper to join multiple authors/keywords
+    let join_field = |key: &str, sep: &str| {
+        ris.fields
+            .get(key)
+            .map(|v| v.join(sep))
+    };
+
+    // Authors (AU): join with " and "
+    let author = join_field("AU", " and ");
+
+    // Title (TI)
+    let title = get_first("TI");
+
+    // Year (PY)
+    let year = get_first("PY");
+
+    // T2 -> journal or booktitle depending on type
+    let t2 = get_first("T2");
+    let (journal, booktitle) = match ris.ty {
+        ReferenceType::Journal => (t2, None),
+        ReferenceType::ConferencePaper => (None, t2),
+        ReferenceType::Book => (None, t2), // If desired, you could store in "series" or "booktitle"
+        _ => (None, None),
+    };
+
+    // Publisher (PB)
+    let publisher = get_first("PB");
+
+    // Volume (VL)
+    let volume = get_first("VL");
+
+    // Number (IS)
+    let number = get_first("IS");
+
+    // Pages: SP and EP combined
+    let sp = get_first("SP");
+    let ep = get_first("EP");
+    let pages = match (sp, ep) {
+        (Some(s), Some(e)) => Some(format!("{}--{}", s, e)),
+        (Some(s), None) => Some(s.to_string()),
+        _ => None,
+    };
+
+    // DOI (DO)
+    let doi = get_first("DO");
+
+    // URL (UR)
+    let url = get_first("UR");
+
+    // Abstract (AB)
+    let abstract_field = get_first("AB");
+
+    // ISSN (SN)
+    let issn = get_first("SN");
+
+    // Keywords (KW): join by ", "
+    let keywords = join_field("KW", ", ");
+
+    // Start building the BibTeX string
+    let mut lines = Vec::new();
+
+    // Start entry: @article{key,
+    lines.push(format!("@{}{{{},", entry_type, entry_key));
+
+    // Add fields if present
+    if let Some(a) = author { lines.push(format!("  author = {{{}}},", a)); }
+    if let Some(t) = title { lines.push(format!("  title = {{{}}},", t)); }
+    if let Some(y) = year { lines.push(format!("  year = {{{}}},", y)); }
+    if let Some(j) = journal { lines.push(format!("  journal = {{{}}},", j)); }
+    if let Some(bt) = booktitle { lines.push(format!("  booktitle = {{{}}},", bt)); }
+    if let Some(p) = publisher { lines.push(format!("  publisher = {{{}}},", p)); }
+    if let Some(v) = volume { lines.push(format!("  volume = {{{}}},", v)); }
+    if let Some(n) = number { lines.push(format!("  number = {{{}}},", n)); }
+    if let Some(pg) = pages { lines.push(format!("  pages = {{{}}},", pg)); }
+    if let Some(d) = doi { lines.push(format!("  doi = {{{}}},", d)); }
+    if let Some(u) = url { lines.push(format!("  url = {{{}}},", u)); }
+    if let Some(ab) = abstract_field { lines.push(format!("  abstract = {{{}}},", ab)); }
+    if let Some(i) = issn { lines.push(format!("  issn = {{{}}},", i)); }
+    if let Some(k) = keywords { lines.push(format!("  keywords = {{{}}},", k)); }
+
+    // Close the entry
+    lines.push("}".to_string());
+
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::{parse_ris, ReferenceType, RisEntry};

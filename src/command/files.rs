@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::model::ris::{self, RisEntry};
+use crate::model::ris::{self, ris_entry_to_bibtex_string, RisEntry};
 use crate::repo;
 use crate::state::AppState;
 use crate::util::print_not_initialized;
@@ -175,7 +175,7 @@ fn add_entry(state: &AppState, entry: &RisEntry) -> Result<()> {
     let mut counter = 1;
     while file_path.exists() {
         file_name = format!(
-            "{}_{}_{}_({}).ris",
+            "{}_{}_{}_{}.ris",
             sanitized_author, sanitized_title, year, counter
         );
         file_path = ris_folder_path.join(&file_name);
@@ -207,4 +207,77 @@ fn first_non_stopword(input: &str, stopwords: &[&str]) -> Option<String> {
         .filter(|word| !stopwords_set.contains(*word)) // Remove stopwords
         .next() // Get the first non-stopword
         .map(|word| word.to_string()) // Convert it to a String
+}
+
+pub fn handle_export(state: &AppState, file_name: &String) -> Result<()> {
+    // Ensure the state is initialized
+    if !state.initialized {
+        print_not_initialized();
+        return Ok(());
+    }
+
+    // Check if a project is selected
+    if state.projects.is_empty() {
+        println!("{}", "No project selected.".blue().bold());
+        return Ok(());
+    }
+
+    let project_path = &state.current_project;
+    let ris_folder = "ris_files";
+    let ris_folder_path = Path::new(project_path).join(ris_folder);
+
+    // Ensure the ris_files folder exists
+    if !ris_folder_path.exists() {
+        println!("{}", "No ris_files folder found.".red().bold());
+        return Ok(());
+    }
+
+    // Collect all .ris files in the folder
+    let mut bibtex_entries = String::new();
+
+    for entry in fs::read_dir(&ris_folder_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Process only .ris files
+        if let Some(extension) = path.extension() {
+            if extension == "ris" {
+                // Read the .ris file
+                let content = fs::read_to_string(&path)?;
+
+                // Parse the RIS content
+                match ris::parse_ris(&content) {
+                    Ok(entries) => {
+                        for ris_entry in entries {
+                            // Generate a unique entry key based on the file name
+                            let entry_key = path
+                                .file_stem()
+                                .and_then(|os_str| os_str.to_str())
+                                .unwrap_or("unknown");
+
+                            // Convert RIS entry to BibTeX
+                            let bibtex_entry = ris_entry_to_bibtex_string(&ris_entry, entry_key);
+                            bibtex_entries.push_str(&bibtex_entry);
+                            bibtex_entries.push('\n'); // Add a newline between entries
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "Error parsing RIS file {}: {}",
+                            path.display(),
+                            err
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Write the concatenated BibTeX entries to the specified file
+    let output_path = Path::new(file_name);
+    fs::write(output_path, bibtex_entries)?;
+
+    println!("BibTeX entries exported to {}", output_path.display());
+
+    Ok(())
 }
