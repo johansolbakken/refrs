@@ -1,8 +1,16 @@
 use anyhow::Result;
 use crate::state::{save_state, AppState};
 
-pub fn handle_init() -> Result<()> {
+pub fn handle_init(state: &mut AppState, force: bool) -> Result<()> {
+    if state.initialized && !force {
+        println!("Refrs already initialized.");
+        return Ok(());
+    }
+
     println!("Initializing...");
-    save_state(&AppState::default())?;
+    *state = AppState::default();
+    state.initialized = true;
+    save_state(state)?;
+
     Ok(())
 }

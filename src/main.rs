@@ -16,7 +16,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Init,
+    Init {
+        #[arg(short, long)]
+        force: bool
+    },
     Clone { relative_path: String, url: String },
     Show,
     #[command(subcommand)]
@@ -34,7 +37,7 @@ fn main() -> Result<()> {
     let mut state = state::load_state()?;
 
     match &cli.command {
-        Commands::Init => command::init::handle_init()?,
+        Commands::Init { force } => command::init::handle_init(&mut state, *force)?,
         Commands::Clone { relative_path, url } => command::clone::handle_clone(&mut state, relative_path, url)?,
         Commands::Show => command::show::handle_show(&state),
         Commands::Workspace(subcommand) => match subcommand {

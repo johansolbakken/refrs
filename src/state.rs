@@ -11,6 +11,9 @@ pub struct Project {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppState {
     #[serde(default)]
+    pub initialized: bool,
+
+    #[serde(default)]
     pub projects: Vec<Project>,
 
     #[serde(default)]
@@ -20,6 +23,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
+            initialized: false,
             projects: Vec::new(),
             current_project: "".to_string(),
         }
