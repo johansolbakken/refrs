@@ -1,7 +1,12 @@
-use crate::state::{save_state, AppState};
+use crate::{state::{save_state, AppState}, util::print_not_initialized};
 use anyhow::Result;
 
 pub fn handle_set(state: &mut AppState) ->  Result<()> {
+    if !state.initialized {
+        print_not_initialized();
+        return Ok(());
+    }
+
     if state.projects.is_empty() {
         println!("No projects available to select.");
         return Ok(());
@@ -27,6 +32,11 @@ pub fn handle_set(state: &mut AppState) ->  Result<()> {
 }
 
 pub fn handle_get(state: &AppState) {
+    if !state.initialized {
+        print_not_initialized();
+        return;
+    }
+
     if state.current_project.is_empty() {
         println!("No current project is set.");
     } else {

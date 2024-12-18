@@ -5,6 +5,7 @@ use clap::Subcommand;
 mod command;
 mod repo;
 mod state;
+mod util;
 
 #[derive(Parser)]
 #[command(name = "refrs")]
