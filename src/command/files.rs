@@ -1,9 +1,10 @@
+use crate::model::ris::{self, RisEntry};
+use crate::state::AppState;
+use crate::util::print_not_initialized;
 use anyhow::Result;
 use arboard::Clipboard;
 use biblatex::{Bibliography, ParseError};
 use colored::Colorize;
-use crate::state::AppState;
-use crate::util::print_not_initialized;
 
 fn print_problematic_line(text: &str, start: usize, end: usize) {
     let lines: Vec<&str> = text.lines().collect();
@@ -52,28 +53,54 @@ pub fn handle_import(state: &AppState, from_clipboard: bool) -> Result<()> {
         let mut clipboard = Clipboard::new()?;
         text = clipboard.get_text()?;
     } else {
-        println!("{}: Currenlty only clipboard is supported. Use: {}", "Warning".bold().yellow(), "refrs import --clipboard".bold());
+        println!(
+            "{}: Currenlty only clipboard is supported. Use: {}",
+            "Warning".bold().yellow(),
+            "refrs import --clipboard".bold()
+        );
         return Ok(());
     }
 
     // First we try to parse BibTex
     match Bibliography::parse(&text) {
         Ok(bibliography) => {
-            for entry in bibliography.iter() {
-                println!("{:?}", entry);
+            if !bibliography.is_empty() {
+                for entry in bibliography.iter() {
+                    add_entry(&ris::RisEntry::from(entry));
+                    println!("{:?}", entry);
+                }
+                return Ok(());
             }
         }
         Err(ParseError { span, .. }) => {
-            println!("{}BibTeX is broken.", "Error: ".red().bold());
+            println!("{}Recognized BibTeX, but content is broken.", "Error: ".red().bold());
             print_problematic_line(&text, span.start, span.end);
             return Ok(());
         }
     }
 
     // Did not recognize bibtex, try RIS
-    // TODO: RIS
+    match ris::parse_ris(&text) {
+        Ok(entries) => {
+            for entry in entries.iter() {
+                add_entry(entry);
+            }
+        }
+        Err(err) => {
+            println!("{}Tried to parse RIS, but got: {}.", "Error: ".red().bold(), err);
+            return Ok(());
+        }
+    }
 
-    println!("Did not recognize text format. Supported formats: {}, {}", "BibTex".bold(), "RIS".bold());
+    println!(
+        "Did not recognize text format. Supported formats: {}, {}",
+        "BibTex".bold(),
+        "RIS".bold()
+    );
 
     Ok(())
+}
+
+fn add_entry(entry: &RisEntry) {
+
 }
