@@ -52,6 +52,55 @@ pub enum ReferenceType {
 }
 
 impl ReferenceType {
+    fn to_str(&self) -> &str {
+        match self {
+            ReferenceType::Abstract => "ABST",
+            ReferenceType::AggregatedDatabase => "AGGR",
+            ReferenceType::AncientText => "ANCIENT",
+            ReferenceType::Art => "ART",
+            ReferenceType::AudiovisualMaterial => "AUD",
+            ReferenceType::Bill => "BILL",
+            ReferenceType::Book => "BOOK",
+            ReferenceType::Case => "CASE",
+            ReferenceType::Catalog => "CTLG",
+            ReferenceType::Chart => "CHAP",
+            ReferenceType::ClassicalWork => "CLSWK",
+            ReferenceType::ComputerProgram => "COMP",
+            ReferenceType::ConferencePaper => "CONF",
+            ReferenceType::ConferenceProceedings => "CPAPER",
+            ReferenceType::Dataset => "DATA",
+            ReferenceType::ElectronicArticle => "ELEC",
+            ReferenceType::ElectronicBook => "EBOOK",
+            ReferenceType::Encyclopedia => "ENCYC",
+            ReferenceType::Equation => "EQUA",
+            ReferenceType::Figure => "FIGURE",
+            ReferenceType::Generic => "GEN",
+            ReferenceType::GovernmentDocument => "GOVDOC",
+            ReferenceType::Grant => "GRANT",
+            ReferenceType::Hearing => "HEAR",
+            ReferenceType::Journal => "JOUR",
+            ReferenceType::LegalRuleOrRegulation => "LEGAL",
+            ReferenceType::MagazineArticle => "MGZN",
+            ReferenceType::Manuscript => "MANSCPT",
+            ReferenceType::Map => "MAP",
+            ReferenceType::Music => "MUSIC",
+            ReferenceType::Newspaper => "NEWS",
+            ReferenceType::OnlineDatabase => "DBASE",
+            ReferenceType::Patent => "PAT",
+            ReferenceType::PersonalCommunication => "PCOMM",
+            ReferenceType::Report => "RPRT",
+            ReferenceType::Serial => "SER",
+            ReferenceType::Slide => "SLIDE",
+            ReferenceType::SoundRecording => "SOUND",
+            ReferenceType::Standard => "STAND",
+            ReferenceType::Statute => "STAT",
+            ReferenceType::Thesis => "THES",
+            ReferenceType::UnpublishedWork => "UNPB",
+            ReferenceType::VideoRecording => "VIDEO",
+            ReferenceType::Unknown => "GEN", // or some fallback
+        }
+    }
+
     /// Parse a `TY` value into a `ReferenceType` enum.
     pub fn from_str(s: &str) -> ReferenceType {
         match s {
@@ -235,9 +284,69 @@ impl RisEntry {
             add_field("UR", url);
         }
 
+        // Abstract -> AB
+        if let Some(abstract_text) = field_as_string("abstract") {
+            add_field("AB", abstract_text);
+        }
+
+        // Keywords -> KW
+        // In BibTeX, keywords are often stored as a comma or semicolon-separated list.
+        // We'll split on commas and semicolons, trim whitespace, and add each as a KW field.
+        if let Some(keywords_str) = field_as_string("keywords") {
+            let delimiters = [',', ';'];
+            let mut keywords = vec![keywords_str.as_str()];
+            // Split by each delimiter found
+            for d in &delimiters {
+                // If the current keywords vector is not further divisible by a delimiter, continue
+                if keywords.len() == 1 && !keywords[0].contains(*d) {
+                    continue;
+                }
+
+                // If a delimiter is found, split all parts by that delimiter
+                let mut new_keywords = Vec::new();
+                for kw in keywords {
+                    let parts: Vec<&str> = kw
+                        .split(*d)
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    new_keywords.extend(parts);
+                }
+                keywords = new_keywords;
+            }
+
+            for kw in keywords {
+                add_field("KW", kw.to_string());
+            }
+        }
+
+        // ISSN -> SN
+        if let Some(issn) = field_as_string("issn") {
+            add_field("SN", issn);
+        }
+
         // Add other fields as needed...
 
         RisEntry { ty, fields }
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut lines = Vec::new();
+
+        // Print the TY line
+        lines.push(format!("TY  - {}", self.ty.to_str()));
+
+        // For each field, print every value
+        for (tag, values) in &self.fields {
+            for value in values {
+                lines.push(format!("{}  - {}", tag, value));
+            }
+        }
+
+        // Print the ending ER line
+        lines.push("ER  -".to_string());
+
+        lines.join("\n")
     }
 }
 
@@ -586,6 +695,113 @@ ER  -
         assert_eq!(
             ris_entry.get_field("UR"),
             Some(&"https://example.com/article.pdf".to_string())
+        );
+    }
+
+    #[test]
+    fn test_ris_entry_from_biblatex_with_abstract_keywords_issn() {
+        use super::{ReferenceType, RisEntry};
+        use biblatex::Bibliography;
+
+        let bib_str = r#"
+@article{ioannidis_parametric_1997,
+    title = {Parametric query optimization},
+    volume = {6},
+    issn = {0949-877X},
+    url = {https://doi.org/10.1007/s007780050037},
+    doi = {10.1007/s007780050037},
+    abstract = {In most database systems, the values of many important run-time parameters of the system, the data, or the query are unknown at query optimization time. Parametric query optimization attempts to identify at compile time several execution plans, each one of which is optimal for a subset of all possible values of the run-time parameters. The goal is that at run time, when the actual parameter values are known, the appropriate plan should be identifiable with essentially no overhead. We present a general formulation of this problem and study it primarily for the buffer size parameter. We adopt randomized algorithms as the main approach to this style of optimization and enhance them with a sideways information passing feature that increases their effectiveness in the new task. Experimental results of these enhanced algorithms show that they optimize queries for large numbers of buffer sizes in the same time needed by their conventional versions for a single buffer size, without much sacrifice in the output quality and with essentially zero run-time overhead.},
+    language = {en},
+    number = {2},
+    urldate = {2024-09-17},
+    journal = {The VLDB Journal},
+    author = {Ioannidis, Yannis E. and Ng, Raymond T. and Shim, Kyuseok and Sellis, Timos K.},
+    month = may,
+    year = {1997},
+    keywords = {Actual Parameter, Buffer Size, Database System, Main Approach, Optimization Time},
+    pages = {132--151}
+}
+"#;
+
+        // Parse the BibLaTeX string.
+        let bibliography = Bibliography::parse(bib_str).expect("Failed to parse BibLaTeX");
+        let bib_entry = bibliography.into_iter().next().expect("No entries found");
+
+        // Convert the BibLaTeX entry to a RIS entry.
+        let ris_entry = RisEntry::from(&bib_entry);
+
+        // Verify the reference type is Journal
+        assert_eq!(ris_entry.ty, ReferenceType::Journal);
+
+        // Check authors
+        let authors = ris_entry.fields.get("AU").expect("No AU field found");
+        assert_eq!(
+            authors,
+            &vec![
+                "Ioannidis, Yannis E.".to_string(),
+                "Ng, Raymond T.".to_string(),
+                "Shim, Kyuseok".to_string(),
+                "Sellis, Timos K.".to_string()
+            ]
+        );
+
+        // Title -> TI
+        assert_eq!(
+            ris_entry.get_field("TI"),
+            Some(&"Parametric query optimization".to_string())
+        );
+
+        // Year -> PY
+        assert_eq!(ris_entry.get_field("PY"), Some(&"1997".to_string()));
+
+        // Journal -> T2
+        assert_eq!(
+            ris_entry.get_field("T2"),
+            Some(&"The VLDB Journal".to_string())
+        );
+
+        // Volume -> VL
+        assert_eq!(ris_entry.get_field("VL"), Some(&"6".to_string()));
+
+        // Number -> IS
+        assert_eq!(ris_entry.get_field("IS"), Some(&"2".to_string()));
+
+        // Pages -> SP and EP
+        assert_eq!(ris_entry.get_field("SP"), Some(&"132".to_string()));
+        assert_eq!(ris_entry.get_field("EP"), Some(&"151".to_string()));
+
+        // DOI -> DO
+        assert_eq!(
+            ris_entry.get_field("DO"),
+            Some(&"10.1007/s007780050037".to_string())
+        );
+
+        // URL -> UR
+        assert_eq!(
+            ris_entry.get_field("UR"),
+            Some(&"https://doi.org/10.1007/s007780050037".to_string())
+        );
+
+        // ISSN -> SN
+        assert_eq!(ris_entry.get_field("SN"), Some(&"0949-877X".to_string()));
+
+        // Abstract -> AB
+        let abstract_field = ris_entry.get_field("AB").expect("No AB field found");
+        assert!(abstract_field.contains(
+            "In most database systems, the values of many important run-time parameters"
+        ));
+
+        // Keywords -> KW
+        let keywords = ris_entry.fields.get("KW").expect("No KW field found");
+        assert_eq!(
+            keywords,
+            &vec![
+                "Actual Parameter".to_string(),
+                "Buffer Size".to_string(),
+                "Database System".to_string(),
+                "Main Approach".to_string(),
+                "Optimization Time".to_string()
+            ]
         );
     }
 }

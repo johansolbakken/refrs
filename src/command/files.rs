@@ -67,13 +67,15 @@ pub fn handle_import(state: &AppState, from_clipboard: bool) -> Result<()> {
             if !bibliography.is_empty() {
                 for entry in bibliography.iter() {
                     add_entry(&ris::RisEntry::from(entry));
-                    println!("{:?}", entry);
                 }
                 return Ok(());
             }
         }
         Err(ParseError { span, .. }) => {
-            println!("{}Recognized BibTeX, but content is broken.", "Error: ".red().bold());
+            println!(
+                "{}Recognized BibTeX, but content is broken.",
+                "Error: ".red().bold()
+            );
             print_problematic_line(&text, span.start, span.end);
             return Ok(());
         }
@@ -82,13 +84,20 @@ pub fn handle_import(state: &AppState, from_clipboard: bool) -> Result<()> {
     // Did not recognize bibtex, try RIS
     match ris::parse_ris(&text) {
         Ok(entries) => {
-            for entry in entries.iter() {
-                add_entry(entry);
+            if !entries.is_empty() {
+                for entry in entries.iter() {
+                    add_entry(entry);
+                }
+                return Ok(());
             }
         }
         Err(err) => {
-            println!("{}Tried to parse RIS, but got: {}.", "Error: ".red().bold(), err);
-            return Ok(());
+            // Gracefully return if error
+            log::error!(
+                "{}Tried to parse RIS, but got: {}.",
+                "Error: ".red().bold(),
+                err
+            );
         }
     }
 
@@ -102,5 +111,5 @@ pub fn handle_import(state: &AppState, from_clipboard: bool) -> Result<()> {
 }
 
 fn add_entry(entry: &RisEntry) {
-
+    println!("{}", entry.to_string());
 }
