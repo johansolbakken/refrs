@@ -25,6 +25,7 @@ enum Commands {
     Show,
     #[command(subcommand)]
     Workspace(WorkspaceSubcommands),
+    Update,
 }
 
 #[derive(Subcommand)]
@@ -47,6 +48,7 @@ fn main() -> Result<()> {
             WorkspaceSubcommands::Set => command::workspace::handle_set(&mut state)?,
             WorkspaceSubcommands::Get => command::workspace::handle_get(&state),
         },
+        Commands::Update => command::update::handle_update(&state)?,
     }
 
     Ok(())
