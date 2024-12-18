@@ -26,6 +26,10 @@ enum Commands {
     #[command(subcommand)]
     Workspace(WorkspaceSubcommands),
     Update,
+    Import {
+        #[arg(long)]
+        clipboard: bool
+    },
 }
 
 #[derive(Subcommand)]
@@ -49,6 +53,7 @@ fn main() -> Result<()> {
             WorkspaceSubcommands::Get => command::workspace::handle_get(&state),
         },
         Commands::Update => command::update::handle_update(&state)?,
+        Commands::Import { clipboard } => command::files::handle_import(&state, *clipboard)?,
     }
 
     Ok(())

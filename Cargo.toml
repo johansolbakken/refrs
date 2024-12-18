@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.94"
+arboard = "3.4.1"
+biblatex = { version="0.10.0", features=["serde"] }
 clap = {version="4.5.23", features=["derive"] }
 colored = "2.2.0"
 dialoguer = "0.11.0"
