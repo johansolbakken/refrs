@@ -55,7 +55,7 @@ refrs workspace set
 To import references from your clipboard:
 
 ```bash
-refrs import --clipboard true
+refrs import --clipboard
 ```
 
 ### Export References
