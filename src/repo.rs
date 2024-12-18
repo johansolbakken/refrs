@@ -76,3 +76,32 @@ pub fn push(repo_path: &str) -> Result<()> {
     println!("{}", "Push completed successfully!".green().bold());
     Ok(())
 }
+
+/// Stages all changes (adds all files) in the specified repository.
+pub fn add_all(repo_path: &str) -> Result<()> {
+    println!(
+        "{} {}",
+        "Staging all changes in:".yellow().bold(),
+        repo_path.underline().bold()
+    );
+
+    execute_git_command(repo_path, &["add", "--all"])?;
+
+    println!("{}", "All changes staged successfully!".green().bold());
+    Ok(())
+}
+
+/// Commits staged changes with the provided commit message.
+pub fn commit(repo_path: &str, message: &str) -> Result<()> {
+    println!(
+        "{} \"{}\" {}",
+        "Committing changes with message:".yellow().bold(),
+        message.cyan().italic(),
+        repo_path.underline().bold()
+    );
+
+    execute_git_command(repo_path, &["commit", "-m", message])?;
+
+    println!("{}", "Commit completed successfully!".green().bold());
+    Ok(())
+}
