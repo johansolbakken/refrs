@@ -10,13 +10,18 @@ pub struct Project {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppState {
+    #[serde(default)]
     pub projects: Vec<Project>,
+
+    #[serde(default)]
+    pub current_project: String,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             projects: Vec::new(),
+            current_project: "".to_string(),
         }
     }
 }

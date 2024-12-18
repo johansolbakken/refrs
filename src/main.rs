@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::Parser;
 use clap::Subcommand;
 
-mod repo;
 mod command;
+mod repo;
 mod state;
 
 #[derive(Parser)]
@@ -19,6 +19,14 @@ enum Commands {
     Init,
     Clone { relative_path: String, url: String },
     Show,
+    #[command(subcommand)]
+    Workspace(WorkspaceSubcommands),
+}
+
+#[derive(Subcommand)]
+enum WorkspaceSubcommands {
+    Set,
+    Get,
 }
 
 fn main() -> Result<()> {
@@ -26,16 +34,13 @@ fn main() -> Result<()> {
     let mut state = state::load_state()?;
 
     match &cli.command {
-        Commands::Init => {
-            command::init::handle_init()?;
-        }
-        Commands::Clone { relative_path, url } => {
-            command::clone::handle_clone(&mut state, relative_path, url)?;
-            state::save_state(&state)?;
-        }
-        Commands::Show => {
-            command::show::handle_show(&state);
-        }
+        Commands::Init => command::init::handle_init()?,
+        Commands::Clone { relative_path, url } => command::clone::handle_clone(&mut state, relative_path, url)?,
+        Commands::Show => command::show::handle_show(&state),
+        Commands::Workspace(subcommand) => match subcommand {
+            WorkspaceSubcommands::Set => command::workspace::handle_set(&mut state)?,
+            WorkspaceSubcommands::Get => command::workspace::handle_get(&state),
+        },
     }
 
     Ok(())
