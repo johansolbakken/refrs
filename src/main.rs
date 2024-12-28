@@ -33,7 +33,9 @@ enum Commands {
     },
     Export {
         output: String
-    }
+    },
+
+    Serve,
 }
 
 #[derive(Subcommand)]
@@ -59,6 +61,7 @@ fn main() -> Result<()> {
         Commands::Update => command::update::handle_update(&state)?,
         Commands::Import { clipboard } => command::files::handle_import(&state, *clipboard)?,
         Commands::Export { output } => command::files::handle_export(&state, output)?,
+        Commands::Serve => command::serve::handle_serve(&state)?,
     }
 
     Ok(())
