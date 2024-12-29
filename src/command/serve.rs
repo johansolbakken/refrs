@@ -1,4 +1,5 @@
 use crate::{
+    services::serialization,
     state::AppState,
     util::{print_not_initialized, read_ris_files_from_dir},
 };
@@ -8,16 +9,17 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse},
     routing::{get, post},
-    Router,
+    Form, Router,
 };
 use colored::Colorize;
+use serde::Deserialize;
 use std::net::SocketAddr;
 
 /// Shared state for all handlers.
 /// You can store additional fields as needed.
 #[derive(Clone)]
 struct AppData {
-    ris_folder: String,
+    project_path: String,
 }
 
 /// GET /
@@ -26,10 +28,8 @@ struct AppData {
 async fn index_handler(
     State(app_data): State<AppData>,
 ) -> Result<Html<String>, (StatusCode, String)> {
-    let ris_entries = read_ris_files_from_dir(&app_data.ris_folder).map_err(|e| {
-        let body = format!("Error reading RIS files: {e}");
-        (StatusCode::INTERNAL_SERVER_ERROR, body)
-    })?;
+    let ris_entries = read_ris_files_from_dir(&format!("{}/ris_files", app_data.project_path))
+        .unwrap_or_default();
 
     // Start building the HTML.
     // This page has:
@@ -51,6 +51,7 @@ async fn index_handler(
                 <h1 class="text-2xl font-bold text-center tracking-wider">Reference Tracker</h1>
                 <p class="text-center text-gray-400 text-sm mb-4">Manage your .ris &amp; .bib files in one place</p>
                 <div class="flex justify-center gap-4">
+                    <a href="/add" class="bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded">Add RIS/BibTeX</a>
                     <a href="/upload" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">Upload File</a>
                     <form action="/update" method="post">
                         <button type="submit" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded">
@@ -232,7 +233,116 @@ async fn update_handler() -> impl IntoResponse {
     Html(r#"<p class="text-white">Updated/synced with the cloud (placeholder)!</p>"#)
 }
 
-/// Sets up and runs the Axum server.
+/// GET /add
+/// Shows a page with a textarea for pasting RIS or BibTeX content.
+async fn add_ris_bibtex_handler() -> Html<String> {
+    let html = r#"
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8" />
+            <title>Add RIS/BibTeX</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-900 text-gray-100 min-h-screen">
+            <header class="p-4 bg-gray-800 shadow-md mb-6">
+                <h1 class="text-2xl font-bold text-center tracking-wider">Add RIS/BibTeX References</h1>
+            </header>
+
+            <main class="max-w-lg mx-auto px-4">
+                <form action="/add" method="post" class="bg-gray-800 p-4 rounded shadow">
+                    <label class="block mb-2 font-medium" for="references">Paste RIS or BibTeX data here:</label>
+                    <textarea
+                        id="references"
+                        name="references"
+                        rows="10"
+                        class="w-full text-gray-200 bg-gray-700 p-2 rounded mb-4"
+                        placeholder="Paste your RIS or BibTeX entries here..."></textarea>
+
+                    <button
+                        class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
+                        type="submit">
+                        Add
+                    </button>
+                </form>
+            </main>
+        </body>
+        </html>
+    "#;
+
+    Html(html.to_string())
+}
+
+#[derive(Deserialize)]
+struct AddReferencesForm {
+    references: String,
+}
+
+/// POST /add
+/// Processes the pasted RIS/BibTeX data.
+async fn add_ris_bibtex_post_handler(
+    State(app_data): State<AppData>,
+    Form(form): Form<AddReferencesForm>,
+) -> impl IntoResponse {
+    // The raw text the user pasted:
+    let pasted_content = form.references;
+
+    // Determine the user-facing message based on the import result.
+    let message = match serialization::import(&pasted_content, &app_data.project_path) {
+        Ok(result) => match result {
+            serialization::ImportResult::BibtexImported => {
+                "Recognized <b>BibTex</b> and imported successfully.".to_string()
+            }
+            serialization::ImportResult::BibtexError { error } => {
+                format!("BibTeX error: {error}")
+            }
+            serialization::ImportResult::RisImported => {
+                "Recognized <b>RIS</b> and imported successfully.".to_string()
+            }
+            serialization::ImportResult::RisError { error } => {
+                format!("RIS error: {error}")
+            }
+            serialization::ImportResult::UnrecognizedFormat => {
+                "Unrecognized format. Could not import the data.".to_string()
+            }
+        },
+        Err(err) => {
+            // Unknown error that should not happen; show full layout with error
+            let body = format!(
+                r#"
+                    <div class="bg-red-800 p-4 rounded mb-4">
+                        <p class="text-white font-bold">Unknown server error:</p>
+                        <p class="text-red-100">{}</p>
+                    </div>
+                    <p>
+                        <a href="/" class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded">
+                            Back to index
+                        </a>
+                    </p>
+                "#,
+                err
+            );
+            return Html(render_layout("Error", &body));
+        }
+    };
+
+    // If we got here, we have a successful or recognized-but-with-errors import.
+    // Show the message and the original pasted content, plus a back button.
+    let body = format!(
+        r#"
+            <div class="bg-gray-800 p-4 rounded mb-4">
+                <p class="text-white">{message}</p>
+                <p class="text-white mt-2">Received references:</p>
+                <pre class="bg-gray-700 text-gray-200 p-2 mt-2 rounded whitespace-pre-wrap">{pasted_content}</pre>
+            </div>
+            <p>
+                <a href="/" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">Back to index</a>
+            </p>
+        "#
+    );
+
+    Html(render_layout("Add References Result", &body))
+}
+
 pub fn handle_serve(state: &AppState) -> Result<()> {
     if !state.initialized {
         print_not_initialized();
@@ -245,9 +355,8 @@ pub fn handle_serve(state: &AppState) -> Result<()> {
     }
 
     // Use your existing logic for choosing the folder.
-    let project_path = &state.current_project;
-    let ris_folder = format!("{project_path}/ris_files");
-    let app_data = AppData { ris_folder };
+    let project_path = state.current_project.clone();
+    let app_data = AppData { project_path };
 
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
@@ -257,6 +366,11 @@ pub fn handle_serve(state: &AppState) -> Result<()> {
             .route("/", get(index_handler))
             // Upload page
             .route("/upload", get(upload_handler).post(upload_post_handler))
+            // Add references (new)
+            .route(
+                "/add",
+                get(add_ris_bibtex_handler).post(add_ris_bibtex_post_handler),
+            )
             // Edit page
             .route("/edit/:id", get(edit_handler).post(edit_post_handler))
             // Update route
@@ -281,4 +395,42 @@ pub fn handle_serve(state: &AppState) -> Result<()> {
             .await
             .map_err(|e| anyhow::anyhow!("Server error: {e}"))
     })
+}
+
+/// Helper to wrap content in a consistent HTML layout with header & footer.
+fn render_layout(page_title: &str, main_content: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>{page_title}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+    <header class="p-4 bg-gray-800 shadow-md mb-6">
+        <h1 class="text-2xl font-bold text-center tracking-wider">Reference Tracker - {page_title}</h1>
+        <p class="text-center text-gray-400 text-sm mb-4">Manage your .ris &amp; .bib files in one place</p>
+        <div class="flex justify-center gap-4">
+            <a href="/add" class="bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded">Add RIS/BibTeX</a>
+            <a href="/upload" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">Upload File</a>
+            <form action="/update" method="post">
+                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded">
+                    Update
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto w-full px-4 flex-grow">
+        {main_content}
+    </main>
+
+    <footer class="bg-gray-800 p-4 text-center text-sm text-gray-500 mt-auto">
+        <p>© 2024 Reference Tracker. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+"#
+    )
 }

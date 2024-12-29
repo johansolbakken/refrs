@@ -6,6 +6,7 @@ mod command;
 mod repo;
 mod state;
 mod util;
+mod services;
 mod model;
 
 #[derive(Parser)]
